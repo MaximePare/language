@@ -9,6 +9,7 @@
 
 open Utiles;;
 open Date;;
+open Printf;;
 
 module L = List;;
 module H = Hashtbl;;
@@ -772,9 +773,57 @@ class gestionnaireReseau
 		if not (H.mem voyages_par_date date) then raise (Erreur "Date invalide");
     (* Traitement correspondant à la fonction *)
 		let noeudS1 = H.find noeuds_stations sid1 in
-		let noeudS2 = H.find noeuds_stations sid1 in
-		if not (G.mem_edge self#get_graphe noeudS1 noeudS2) then raise (Erreur "Pas d'arete entre s1 et s2");
-     
+		let noeudS2 = H.find noeuds_stations sid2 in
+		if not(G.mem_edge self#get_graphe noeudS1 noeudS2) then raise (Erreur "Pas d'arete entre s1 et s2");
+		
+		let s1 = H.find stations sid1 in
+		let s2 = H.find stations sid2 in
+		
+		let voyagesId1 = s1#get_voyages_passants in 
+		let voyagesId2 = s2#get_voyages_passants in
+		let voyagesParDate = self#trouver_voyages_par_date ~date:(date)() in
+		
+		let voyagesIdPareille = voyagesId1 ++ voyagesId2 in
+		let voyageId = voyagesIdPareille ++ voyagesParDate in
+		
+		let lesLignesTuple = self#prochaines_lignes_entre ~date:(date) ~heure:(heure) sid1 sid2 in
+		let lesLignes = L.map (fun (x,y,z)->x)lesLignesTuple in
+		let touteLesLignes = L.concat (L.map (fun x-> self#trouver_voyages_sur_la_ligne ~date:(Some date) x) lesLignes) in
+		let id = voyageId ++ touteLesLignes in
+		
+		
+   	let lesArrets = L.concat
+      (L.map 
+         (fun vid -> 
+            let v = H.find voyages vid in 
+      v#get_arrets 
+         ) voyageId
+      ) in
+		
+		let lesArretsStationId = L.map (fun x -> x#get_station_id) lesArrets in
+		
+		
+		if((L.exists (fun x-> x = sid1) lesArretsStationId) && (L.exists (fun x-> x = sid2) lesArretsStationId)) then
+			
+			let a = L.filter (fun x -> x#get_station_id = sid1) lesArrets in
+			let b = L.filter (fun x -> x#get_station_id = sid2) lesArrets in
+		
+			let temps = L.map2 (fun x y -> y#get_arrivee - x#get_arrivee) a b in
+			
+			let tempsMax = top_liste max temps in
+			begin
+				G.remove_edge graphe_stations noeudS1 noeudS2;
+				G.add_edge_e graphe_stations (G.E.create noeudS1 tempsMax noeudS2)
+			end
+
+
+		else
+			begin
+				G.remove_edge graphe_stations noeudS1 noeudS2;
+				G.add_edge_e graphe_stations (G.E.create noeudS1 poids_max_arete noeudS2)
+			end
+
+    
 (*
     (* ----------------------------------------------------------------------- *)
     (* @Fonction      : maj_toutes_aretes_reseau : ?date:int -> ?heure:int ->  *)
